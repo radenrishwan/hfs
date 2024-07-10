@@ -1,7 +1,6 @@
 package hsp
 
 import (
-	"errors"
 	"log/slog"
 	"net"
 	"strconv"
@@ -55,11 +54,6 @@ func NewServer(address string, option Option) *Server {
 }
 
 var httpErr = make(chan error)
-
-var (
-	ErrHandler = errors.New("Error while handling request")
-	ErrHttp    = errors.New("Error while handling http request")
-)
 
 func (s *Server) handleError() {
 	for {
