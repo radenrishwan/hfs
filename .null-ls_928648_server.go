@@ -23,6 +23,24 @@ type Response struct {
 	Body    string
 }
 
+func (r *Response) AddHeader(key, value string) {
+	r.Headers[key] = value
+}
+
+func (r *Response) SetBody(body string) {
+	r.Body = body
+}
+
+func (r *Response) SetCode(code int) {
+	r.Code = code
+}
+
+func (r *Response) SetCache(value string, maxAge int, path string) {
+	r.Headers["Cache-Control"] = value
+	r.Headers["Max-Age"] = strconv.Itoa(maxAge)
+	r.Headers["Path"] = path
+}
+
 type Handler struct {
 	Path    string
 	Handler ResponseHandler

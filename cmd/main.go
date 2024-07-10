@@ -15,13 +15,15 @@ func main() {
 	server := hsp.NewServer("localhost:3000", hsp.Option{})
 
 	server.Handle("/", func(req hsp.Request) *hsp.Response {
-		return &hsp.Response{
-			Code: 200,
-			Headers: map[string]string{
-				"Content-Type": "text/plain",
-			},
-			Body: "Hello, World!",
-		}
+		response := hsp.NewResponse()
+		response.SetCode(200)
+		response.AddHeader("Content-Type", "text/plain")
+		response.SetBody("Hello, World!")
+
+		response.SetCookie("foo", "bar", "/", 3600)
+		response.SetCookie("baz", "qux", "/", 3600)
+
+		return response
 	})
 
 	server.Handle("/about", func(req hsp.Request) *hsp.Response {
