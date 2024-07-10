@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log/slog"
 	"os"
 
@@ -15,6 +16,8 @@ func main() {
 	server := hsp.NewServer("localhost:3000", hsp.Option{})
 
 	server.Handle("/", func(req hsp.Request) *hsp.Response {
+		fmt.Println(req.Cookie)
+
 		response := hsp.NewResponse()
 		response.SetCode(200)
 		response.AddHeader("Content-Type", "text/plain")

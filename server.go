@@ -13,6 +13,7 @@ type Request struct {
 	Path    string
 	Version string
 	Headers map[string]string
+	Cookie  map[string]string
 	Body    string
 	Conn    net.Conn
 }

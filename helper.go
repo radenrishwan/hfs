@@ -35,8 +35,21 @@ func parseRequest(conn net.Conn) Request {
 	}
 
 	request.Conn = conn
+	request.Cookie = parseCookie(request.Headers["Cookie"])
 
 	return request
+}
+
+func parseCookie(cookie string) map[string]string {
+	cookieMap := make(map[string]string)
+	cookies := strings.Split(cookie, "; ")
+
+	for _, c := range cookies {
+		cookie := strings.Split(c, "=")
+		cookieMap[cookie[0]] = cookie[1]
+	}
+
+	return cookieMap
 }
 
 func headerString(headers map[string]string) string {
