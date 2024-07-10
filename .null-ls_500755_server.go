@@ -1,7 +1,6 @@
 package hsp
 
 import (
-	"errors"
 	"log/slog"
 	"net"
 	"strconv"
@@ -30,64 +29,33 @@ type Handler struct {
 }
 
 type Server struct {
-	address    string
-	socket     net.Listener
-	Handlers   []Handler
-	ErrHandler func(error)
+	address  string
+	socket   net.Listener
+	Handlers []Handler
 }
 
-type Option struct {
-	ErrHandler func(error)
-}
-
-func NewServer(address string, option Option) *Server {
-	// check err handler in option is nil
-	if option.ErrHandler == nil {
-		option.ErrHandler = func(err error) {
-			slog.Error("Error while handling request", "ERROR", err)
-		}
-	}
-
+func NewServer(address string) *Server {
 	return &Server{
-		address:    address,
-		ErrHandler: option.ErrHandler,
+		address: address,
 	}
 }
 
-var httpErr = make(chan error)
+var error chan error
 
-var (
-	ErrHandler = errors.New("Error while handling request")
-	ErrHttp    = errors.New("Error while handling http request")
-)
-
-func (s *Server) handleError() {
-	for {
-		select {
-		case err := <-httpErr:
-			s.ErrHandler(err)
-		default:
-			continue
-		}
-	}
-}
-
-func (s *Server) ListenAndServe() error {
+func (s *Server) ListenAndServer() error {
 	socket, err := net.Listen("tcp", s.address)
 	if err != nil {
-		return NewServerError("Error while listening to address: " + err.Error())
+		slog.Error("Error while listening", "ERROR", err)
 	}
-
-	go s.handleError()
 
 	for {
 		conn, err := socket.Accept()
 		if err != nil {
-			httpErr <- NewHandlingError("Error while accepting connection")
+			slog.Error("Error while accepting connection", "ERROR", err)
 		}
 
 		if len(s.Handlers) == 0 {
-			httpErr <- NewHandlingError("No handler found for the request")
+			slog.Error("No handlers registered")
 		}
 
 		go s.handleConnection(conn)
@@ -109,7 +77,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 	}
 
 	if response == nil {
-		httpErr <- NewHttpError("404", "No handler found for the request")
+		slog.Error("No handler found for the request")
 		return
 	}
 
@@ -134,22 +102,17 @@ func (s *Server) handleConnection(conn net.Conn) {
 	))
 }
 
-func (s *Server) Handle(path string, handler ResponseHandler) error {
+func (s *Server) Handle(path string, handler ResponseHandler) {
 	// check duplicate path
 	for _, h := range s.Handlers {
 		if h.Path == path {
-			return NewServerError("Duplicate path found")
+			slog.Error("Duplicate path", "PATH", path)
 		}
+
 	}
 
 	s.Handlers = append(s.Handlers, Handler{
 		Path:    path,
 		Handler: handler,
 	})
-
-	return nil
-}
-
-func (s *Server) SetErrHandler(handler func(error)) {
-	s.ErrHandler = handler
 }

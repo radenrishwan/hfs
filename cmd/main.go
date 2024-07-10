@@ -12,7 +12,7 @@ var DEFAULT_LOGGER = slog.New(slog.NewTextHandler(os.Stderr, nil))
 func main() {
 	slog.SetDefault(DEFAULT_LOGGER)
 
-	server := hsp.NewServer("localhost:3000")
+	server := hsp.NewServer("localhost:3000", hsp.Option{})
 
 	server.Handle("/", func(req hsp.Request) *hsp.Response {
 		return &hsp.Response{
@@ -34,5 +34,5 @@ func main() {
 		}
 	})
 
-	server.ListenAndServer()
+	server.ListenAndServe()
 }
