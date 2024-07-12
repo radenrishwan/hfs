@@ -7,6 +7,7 @@ import (
 )
 
 type ResponseHandler func(Request) *Response
+type ErrResponseHandler func(Request, error)
 
 type Request struct {
 	Method  string
@@ -56,18 +57,28 @@ type Server struct {
 	address    string
 	socket     net.Listener
 	Handlers   []Handler
-	ErrHandler func(error)
+	ErrHandler ErrResponseHandler
 }
 
 type Option struct {
-	ErrHandler func(error)
+	ErrHandler ErrResponseHandler
 }
 
 func NewServer(address string, option Option) *Server {
 	// check err handler in option is nil
 	if option.ErrHandler == nil {
-		option.ErrHandler = func(err error) {
+		option.ErrHandler = func(req Request, err error) {
 			slog.Error("Error while handling request", "ERROR", err)
+
+			response := Response{
+				Code: 500,
+				Headers: map[string]string{
+					"Content-Type": "text/plain",
+				},
+				Body: "Internal Server Error",
+			}
+
+			writeResponse(&response, req.Conn)
 		}
 	}
 
@@ -77,35 +88,30 @@ func NewServer(address string, option Option) *Server {
 	}
 }
 
-var httpErr = make(chan error)
-
-func (s *Server) handleError() {
-	for {
-		select {
-		case err := <-httpErr:
-			s.ErrHandler(err)
-		default:
-			continue
-		}
-	}
-}
-
 func (s *Server) ListenAndServe() error {
 	socket, err := net.Listen("tcp", s.address)
 	if err != nil {
 		return NewServerError("Error while listening to address: " + err.Error())
 	}
 
-	go s.handleError()
-
 	for {
 		conn, err := socket.Accept()
 		if err != nil {
-			httpErr <- NewHandlingError("Error while accepting connection")
+			request := Request{
+				Conn:    conn,
+				Path:    "",
+				Method:  "",
+				Version: "",
+				Headers: make(map[string]string),
+				Cookie:  make(map[string]string),
+				Body:    "Server Error",
+			}
+
+			s.ErrHandler(request, NewServerError("Error while accepting connection"))
 		}
 
 		if len(s.Handlers) == 0 {
-			httpErr <- NewHandlingError("No handler found for the request")
+			return NewServerError("No handler found for the request")
 		}
 
 		go s.handleConnection(conn)
@@ -116,40 +122,38 @@ func (s *Server) handleConnection(conn net.Conn) {
 	defer conn.Close()
 
 	request := parseRequest(conn)
+	var err error
 	var response *Response
 
 	// find the handler for the request
 	for _, handler := range s.Handlers {
 		if request.Path == handler.Path {
-			response = handler.Handler(request)
-			break
+			func() {
+				defer func() {
+					rc := recover()
+
+					// check if error is not nil
+					if rc != nil {
+						err = rc.(error)
+					}
+
+				}()
+
+				response = handler.Handler(request)
+			}()
 		}
 	}
 
+	if err != nil {
+		s.ErrHandler(request, err)
+	}
+
 	if response == nil {
-		httpErr <- NewHttpError("404", "No handler found for the request", request)
+		s.ErrHandler(request, NewHttpError(404, "No handler found for the request", request))
 		return
 	}
 
-	// check if header has a content-type
-	if _, ok := response.Headers["Content-Type"]; !ok {
-		response.Headers["Content-Type"] = "text/plain"
-	}
-
-	// add content length to Headers
-	response.Headers["Content-Length"] = strconv.Itoa(len(response.Body))
-
-	// check if code is 0
-	if response.Code == 0 {
-		response.Code = 200
-	}
-
-	conn.Write([]byte(
-		"HTTP/1.1 " + strconv.Itoa(response.Code) + "\r\n" +
-			headerString(response.Headers) +
-			"\r\n" +
-			response.Body,
-	))
+	writeResponse(response, conn)
 }
 
 func (s *Server) Handle(path string, handler ResponseHandler) error {
@@ -168,6 +172,6 @@ func (s *Server) Handle(path string, handler ResponseHandler) error {
 	return nil
 }
 
-func (s *Server) SetErrHandler(handler func(error)) {
+func (s *Server) SetErrHandler(handler ErrResponseHandler) {
 	s.ErrHandler = handler
 }

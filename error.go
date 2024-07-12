@@ -27,15 +27,15 @@ func NewHandlingError(msg string) *HandlingError {
 }
 
 type HttpError struct {
-	Code    string
+	Code    int
 	Msg     string
 	Request Request
 }
 
 func (e *HttpError) Error() string {
-	return fmt.Sprintf("HTTP %s: %s -> %s %s", e.Code, e.Msg, e.Request.Path, e.Request.Method)
+	return fmt.Sprintf("HTTP %d: %s -> %s %s", e.Code, e.Msg, e.Request.Path, e.Request.Method)
 }
 
-func NewHttpError(code string, msg string, request Request) *HttpError {
+func NewHttpError(code int, msg string, request Request) *HttpError {
 	return &HttpError{Code: code, Msg: msg, Request: request}
 }

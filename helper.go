@@ -3,18 +3,22 @@ package hsp
 import (
 	"log/slog"
 	"net"
+	"strconv"
 	"strings"
 )
 
-func parseRequest(conn net.Conn) Request {
+func parseRequest(conn net.Conn) (request Request) {
 	buf := make([]byte, 1024)
+	request.Conn = conn
+
 	_, err := conn.Read(buf)
 	if err != nil {
 		slog.Error("Error while reading from connection", "ERROR", err)
+
+		return request
 	}
 
 	stringBuf := string(buf)
-	var request Request
 
 	sp := strings.Split(stringBuf, "\r\n")
 
@@ -34,8 +38,10 @@ func parseRequest(conn net.Conn) Request {
 		request.Headers[header[0]] = header[1]
 	}
 
-	request.Conn = conn
-	request.Cookie = parseCookie(request.Headers["Cookie"])
+	// check if cookie exists in Headers
+	if request.Headers["Cookie"] != "" {
+		request.Cookie = parseCookie(request.Headers["Cookie"])
+	}
 
 	return request
 }
@@ -59,4 +65,26 @@ func headerString(headers map[string]string) string {
 	}
 
 	return headerString
+}
+
+func writeResponse(response *Response, conn net.Conn) {
+	// check if header has a content-type
+	if _, ok := response.Headers["Content-Type"]; !ok {
+		response.Headers["Content-Type"] = "text/plain"
+	}
+
+	// add content length to Headers
+	response.Headers["Content-Length"] = strconv.Itoa(len(response.Body))
+
+	// check if code is 0
+	if response.Code == 0 {
+		response.Code = 200
+	}
+
+	conn.Write([]byte(
+		"HTTP/1.1 " + strconv.Itoa(response.Code) + "\r\n" +
+			headerString(response.Headers) +
+			"\r\n" +
+			response.Body,
+	))
 }
