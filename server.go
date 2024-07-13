@@ -118,7 +118,6 @@ func (s *Server) handleConnection(conn net.Conn) {
 
 	if response == nil {
 		response = s.ErrHandler(request, NewHttpError(404, "No handler found for the request", request))
-		return
 	}
 
 	writeResponse(response, conn)

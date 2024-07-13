@@ -19,17 +19,18 @@ func main() {
 	server.SetErrHandler(func(req hsp.Request, err error) *hsp.Response {
 		slog.Error("Error while handling request", "ERROR", err)
 
-		if httpError, ok := err.(*hsp.HttpError); ok {
-			if httpError.Code == http.StatusNotFound {
-				return &hsp.Response{
-					Code: 404,
-					Headers: map[string]string{
-						"Content-Type": "text/plain",
-					},
-					Body: "Not Found",
-				}
-			}
-		}
+    if httpError, ok := err.(*hsp.HttpError); ok {
+      if httpError.Code == http.NotFound {
+        return &hsp.Response{
+          Code: 404,
+          Headers: map[string]string{
+            "Content-Type": "text/plain",
+          },
+          Body: "Not Found",
+        
+      }
+    }
+    
 
 		return &hsp.Response{
 			Code: 500,
