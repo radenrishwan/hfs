@@ -89,12 +89,6 @@ func (s *Server) handleConnection(conn net.Conn) {
 	// find the handler for the request
 	for _, handler := range s.Handlers {
 		if request.Path == handler.Path {
-			// check if method is not same, if method is "", call the handler instead
-			if handler.Method != request.Method && handler.Method != "" {
-				s.ErrHandler(request, NewHttpError(405, "Method not allowed", request))
-				return
-			}
-
 			func() {
 				defer func() {
 					rc := recover()
@@ -108,14 +102,11 @@ func (s *Server) handleConnection(conn net.Conn) {
 
 				response = handler.Handler(request)
 			}()
-
-			break
 		}
 	}
 
 	if err != nil {
 		s.ErrHandler(request, err)
-		return
 	}
 
 	if response == nil {
@@ -134,12 +125,15 @@ func (s *Server) Handle(path string, handler ResponseHandler) error {
 		}
 	}
 
-	method, path := parsePath(path)
+  method, path := parsePath(path)
+
+  if 
 
 	s.Handlers = append(s.Handlers, Handler{
 		Path:    path,
 		Handler: handler,
-		Method:  method,
+    Method: method
+		// TODO: add method later
 	})
 
 	return nil

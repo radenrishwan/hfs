@@ -16,7 +16,7 @@ func main() {
 	server := hsp.NewServer("localhost:3000", hsp.Option{})
 
 	server.Handle("/", func(req hsp.Request) *hsp.Response {
-		panic(hsp.NewHttpError(500, "Internal Server Error", req))
+		// panic(hsp.NewHttpError(500, "Internal Server Error", req))
 
 		return &hsp.Response{
 			Code: 200,
@@ -27,7 +27,7 @@ func main() {
 		}
 	})
 
-	server.Handle("/cookie", func(req hsp.Request) *hsp.Response {
+	server.Handle("GET /cookie", func(req hsp.Request) *hsp.Response {
 		fmt.Println(req.Cookie)
 
 		response := hsp.NewResponse()

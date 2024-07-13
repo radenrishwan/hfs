@@ -88,3 +88,37 @@ func writeResponse(response *Response, conn net.Conn) {
 			response.Body,
 	))
 }
+
+func parsePath(uri string) (method, path string) {
+	s := strings.Split(uri, " ")
+
+	if len(s) == 1 {
+		path = s[0]
+		return method, path
+	}
+
+	return s[0], s[1]
+}
+
+func parseArgs(uri string) (result map[string]string) {
+	s := strings.Split(uri, "?")
+	result = make(map[string]string)
+
+	if len(s) == 1 {
+		return result
+	}
+
+	args := strings.Split(s[1], "&")
+
+	for _, args := range args {
+		arg := strings.Split(args, "=")
+		if len(arg) == 1 {
+			result[arg[0]] = ""
+			continue
+		}
+
+		result[arg[0]] = arg[1]
+	}
+
+	return result
+}
