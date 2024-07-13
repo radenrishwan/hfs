@@ -51,6 +51,14 @@ func main() {
 		}
 	})
 
+	server.Handle("/args", func(req hsp.Request) *hsp.Response {
+		response := hsp.NewResponse()
+		response.SetCode(200)
+		response.SetBody(req.Args["name"])
+
+		return response
+	})
+
 	server.Handle("GET /get", func(req hsp.Request) *hsp.Response {
 		response := hsp.NewResponse()
 		response.SetCode(200)

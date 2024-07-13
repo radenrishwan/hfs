@@ -24,7 +24,6 @@ func parseRequest(conn net.Conn) (request Request) {
 
 	requestLine := strings.Split(sp[0], " ")
 	request.Method = strings.ToUpper(requestLine[0])
-	request.Path = requestLine[1]
 	request.Version = requestLine[2]
 
 	request.Headers = make(map[string]string)
@@ -42,6 +41,9 @@ func parseRequest(conn net.Conn) (request Request) {
 	if request.Headers["Cookie"] != "" {
 		request.Cookie = parseCookie(request.Headers["Cookie"])
 	}
+
+	// parse args
+	request.Path, request.Args = parseArgs(requestLine[1])
 
 	return request
 }
@@ -101,12 +103,12 @@ func parsePath(uri string) (method, path string) {
 	return method, s[1]
 }
 
-func parseArgs(uri string) (result map[string]string) {
+func parseArgs(uri string) (string, map[string]string) {
 	s := strings.Split(uri, "?")
-	result = make(map[string]string)
+	result := make(map[string]string)
 
 	if len(s) == 1 {
-		return result
+		return s[0], result
 	}
 
 	args := strings.Split(s[1], "&")
@@ -121,5 +123,5 @@ func parseArgs(uri string) (result map[string]string) {
 		result[arg[0]] = arg[1]
 	}
 
-	return result
+	return s[0], result
 }
