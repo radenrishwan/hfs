@@ -51,5 +51,21 @@ func main() {
 		}
 	})
 
+	server.Handle("GET /get", func(req hsp.Request) *hsp.Response {
+		response := hsp.NewResponse()
+		response.SetCode(200)
+		response.SetBody("GET")
+
+		return response
+	})
+
+	server.Handle("POST /post", func(req hsp.Request) *hsp.Response {
+		response := hsp.NewResponse()
+		response.SetCode(200)
+		response.SetBody("POST")
+
+		return response
+	})
+
 	server.ListenAndServe()
 }

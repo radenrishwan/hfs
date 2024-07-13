@@ -23,7 +23,7 @@ func parseRequest(conn net.Conn) (request Request) {
 	sp := strings.Split(stringBuf, "\r\n")
 
 	requestLine := strings.Split(sp[0], " ")
-	request.Method = requestLine[0]
+	request.Method = strings.ToUpper(requestLine[0])
 	request.Path = requestLine[1]
 	request.Version = requestLine[2]
 
@@ -97,7 +97,8 @@ func parsePath(uri string) (method, path string) {
 		return method, path
 	}
 
-	return s[0], s[1]
+	method = strings.ToUpper(s[0])
+	return method, s[1]
 }
 
 func parseArgs(uri string) (result map[string]string) {

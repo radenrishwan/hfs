@@ -3,7 +3,9 @@ package hsp
 import "strconv"
 
 type Response struct {
-	Code    int
+	Code int
+	// you need to assign a headers map if you create response from [Response],
+	// please use [NewResponse] instead to avoid nil headers
 	Headers map[string]string
 	Body    string
 }
