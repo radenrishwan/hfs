@@ -15,6 +15,18 @@ func main() {
 
 	server := hsp.NewServer("localhost:3000", hsp.Option{})
 
+	server.SetErrHandler(func(req hsp.Request, err error) *hsp.Response {
+		slog.Error("Error while handling request", "ERROR", err)
+
+		return &hsp.Response{
+			Code: 500,
+			Headers: map[string]string{
+				"Content-Type": "text/plain",
+			},
+			Body: "Internal Server Error",
+		}
+	})
+
 	server.Handle("/", func(req hsp.Request) *hsp.Response {
 		// panic(hsp.NewHttpError(500, "Internal Server Error", req))
 

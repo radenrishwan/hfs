@@ -6,7 +6,7 @@ import (
 )
 
 type ResponseHandler func(Request) *Response
-type ErrResponseHandler func(Request, error)
+type ErrResponseHandler func(Request, error) *Response
 
 type Handler struct {
 	Path    string
@@ -28,18 +28,16 @@ type Server struct {
 func NewServer(address string, option Option) *Server {
 	// check err handler in option is nil
 	if option.ErrHandler == nil {
-		option.ErrHandler = func(req Request, err error) {
+		option.ErrHandler = func(req Request, err error) *Response {
 			slog.Error("Error while handling request", "ERROR", err)
 
-			response := Response{
+			return &Response{
 				Code: 500,
 				Headers: map[string]string{
 					"Content-Type": "text/plain",
 				},
 				Body: "Internal Server Error",
 			}
-
-			writeResponse(&response, req.Conn)
 		}
 	}
 
@@ -68,7 +66,8 @@ func (s *Server) ListenAndServe() error {
 				Body:    "Server Error",
 			}
 
-			s.ErrHandler(request, NewServerError("Error while accepting connection"))
+			response := s.ErrHandler(request, NewServerError("Error while accepting connection"))
+			writeResponse(response, conn)
 		}
 
 		if len(s.Handlers) == 0 {
@@ -91,8 +90,8 @@ func (s *Server) handleConnection(conn net.Conn) {
 		if request.Path == handler.Path {
 			// check if method is not same, if method is "", call the handler instead
 			if handler.Method != request.Method && handler.Method != "" {
-				s.ErrHandler(request, NewHttpError(405, "Method not allowed", request))
-				return
+				response = s.ErrHandler(request, NewHttpError(405, "Method not allowed", request))
+				break
 			}
 
 			func() {
@@ -114,12 +113,11 @@ func (s *Server) handleConnection(conn net.Conn) {
 	}
 
 	if err != nil {
-		s.ErrHandler(request, err)
-		return
+		response = s.ErrHandler(request, err)
 	}
 
 	if response == nil {
-		s.ErrHandler(request, NewHttpError(404, "No handler found for the request", request))
+		response = s.ErrHandler(request, NewHttpError(404, "No handler found for the request", request))
 		return
 	}
 
