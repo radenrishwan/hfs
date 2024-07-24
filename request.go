@@ -1,8 +1,12 @@
 package hsp
 
-import "net"
+import (
+	"context"
+	"net"
+)
 
 type Request struct {
+	Context context.Context
 	Method  string
 	Path    string
 	Version string

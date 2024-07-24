@@ -10,6 +10,7 @@ import (
 )
 
 var DEFAULT_LOGGER = slog.New(slog.NewTextHandler(os.Stderr, nil))
+var websocket = hsp.NewWebsocket()
 
 func main() {
 	slog.SetDefault(DEFAULT_LOGGER)
@@ -37,6 +38,22 @@ func main() {
 				"Content-Type": "text/plain",
 			},
 			Body: "Internal Server Error",
+		}
+	})
+
+	server.Handle("/ws", func(req hsp.Request) *hsp.Response {
+		// print headers
+		// fmt.Println(req.Headers)
+
+		fmt.Println("Upgrading to websocket")
+		websocket.Upgrade(req)
+
+		return &hsp.Response{
+			Code: 200,
+			Headers: map[string]string{
+				"Content-Type": "text/plain",
+			},
+			Body: "Websocket",
 		}
 	})
 

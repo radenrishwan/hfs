@@ -79,7 +79,7 @@ func (s *Server) ListenAndServe() error {
 }
 
 func (s *Server) handleConnection(conn net.Conn) {
-	defer conn.Close()
+	// defer conn.Close()
 
 	request := parseRequest(conn)
 	var err error
