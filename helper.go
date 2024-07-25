@@ -2,8 +2,6 @@ package hsp
 
 import (
 	"context"
-	"crypto/sha1"
-	"encoding/base64"
 	"log/slog"
 	"net"
 	"strconv"
@@ -128,12 +126,4 @@ func parseArgs(uri string) (string, map[string]string) {
 	}
 
 	return s[0], result
-}
-
-func generateWebsocketKey(key string) string {
-	sha := sha1.New()
-	sha.Write([]byte(key))
-	sha.Write([]byte("258EAFA5-E914-47DA-95CA-C5AB0DC85B11"))
-
-	return base64.StdEncoding.EncodeToString(sha.Sum(nil))
 }
