@@ -4,17 +4,28 @@ import (
 	"crypto/sha1"
 	"encoding/base64"
 	"encoding/binary"
-	"fmt"
 	"net"
+	"time"
 )
 
 const MAGIC_KEY = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 
-type Websocket struct{}
+type Websocket struct {
+	Option *WSOption
+}
 
 type Client struct {
-	Id   string
-	Conn *net.Conn
+	Id     int64
+	Conn   net.Conn
+	option *WSOption
+}
+
+type WSOption struct {
+	MsgMaxSize int
+}
+
+var DefaultWSOption = WSOption{
+	MsgMaxSize: 1024,
 }
 
 type WsFrame struct {
@@ -29,8 +40,14 @@ type WsFrame struct {
 	Payload []byte
 }
 
-func NewWebsocket() *Websocket {
-	return &Websocket{}
+func NewWebsocket(option *WSOption) (ws Websocket) {
+	if option == nil {
+		option = &DefaultWSOption
+	}
+
+	return Websocket{
+		Option: option,
+	}
 }
 
 // HTTP/1.1 101 Switching Protocols
@@ -39,12 +56,15 @@ func NewWebsocket() *Websocket {
 // Sec-WebSocket-Accept: s3pPLMBiTxaQ9kYGzzhZRbK+xOo=
 // Sec-WebSocket-Protocol: chat
 
-func (ws *Websocket) Upgrade(request Request) *Client {
+func (ws *Websocket) Upgrade(request Request) (client Client, err error) {
 	key := request.Headers["Sec-WebSocket-Key"]
+	if key == "" {
+		return client, NewWsError("Sec-WebSocket-Key is required")
+	}
 
 	acceptKey := generateWebsocketKey(key)
 
-	request.Conn.Write([]byte(
+	_, err = request.Conn.Write([]byte(
 		"HTTP/1.1 101 Switching Protocols\r\n" +
 			"Upgrade: websocket\r\n" +
 			"Connection: Upgrade\r\n" +
@@ -52,31 +72,52 @@ func (ws *Websocket) Upgrade(request Request) *Client {
 			"\r\n",
 	))
 
-	msg := encodeFrame([]byte("hello world"))
-
-	request.Conn.Write(msg)
-
-	for {
-		buf := make([]byte, 1024)
-
-		n, err := request.Conn.Read(buf)
-		if err != nil {
-			fmt.Println("Error reading from connection", err)
-			break
-		}
-
-		f, err := decodeFrame(buf[:n])
-		if err != nil {
-			fmt.Println("Error decoding frame", err)
-			break
-		}
-
-		fmt.Println(string(f.Payload))
+	if err != nil {
+		return client, NewWsError("Error while upgrading connection : " + err.Error())
 	}
 
-	return &Client{
-		Conn: &request.Conn,
+	client.Conn = request.Conn
+	client.Id = time.Now().UnixNano()
+	client.option = ws.Option
+
+	return client, nil
+}
+
+func (client *Client) Send(msg string) error {
+	frame := encodeFrame([]byte(msg))
+
+	_, err := client.Conn.Write(frame)
+	if err != nil {
+		return NewWsError("Error sending message : " + err.Error())
 	}
+
+	return nil
+}
+
+func (client *Client) Read() ([]byte, error) {
+	buf := make([]byte, client.option.MsgMaxSize)
+
+	n, err := client.Conn.Read(buf)
+	if err != nil {
+		return nil, NewWsError("Error reading message : " + err.Error())
+	}
+
+	f, err := decodeFrame(buf[:n])
+	if err != nil {
+		return nil, NewWsError("Error decoding frame : " + err.Error())
+	}
+
+	return f.Payload, nil
+}
+
+func (client *Client) Close() error {
+	// TODO: Send close signal
+	err := client.Conn.Close()
+	if err != nil {
+		return NewWsError("Error closing connection : " + err.Error())
+	}
+
+	return nil
 }
 
 func generateWebsocketKey(key string) string {
@@ -96,10 +137,14 @@ func encodeFrame(msg []byte) []byte {
 		frame = append(frame, byte(length))
 	} else if length <= 0xFFFF {
 		frame = append(frame, 126)
+
+		// add length as 16-bit unsigned integer
 		frame = append(frame, byte(length>>8))
 		frame = append(frame, byte(length&0xFF))
 	} else {
 		frame = append(frame, 127)
+
+		// add length as 64-bit unsigned integer
 		frame = append(frame, byte(length>>56))
 		frame = append(frame, byte(length>>48&0xFF))
 		frame = append(frame, byte(length>>40&0xFF))
@@ -116,7 +161,7 @@ func encodeFrame(msg []byte) []byte {
 
 func decodeFrame(data []byte) (*WsFrame, error) {
 	if len(data) < 2 {
-		return nil, NewWsError("insufficient data for frame", nil)
+		return nil, NewWsError("insufficient data for frame")
 	}
 
 	frame := &WsFrame{}
@@ -136,13 +181,13 @@ func decodeFrame(data []byte) (*WsFrame, error) {
 	switch payloadLength {
 	case 126:
 		if len(data) < 4 {
-			return nil, NewWsError("insufficient data for payload length", nil)
+			return nil, NewWsError("insufficient data for payload length")
 		}
 		frame.Length = uint64(binary.BigEndian.Uint16(data[2:4]))
 		dataOffset = 4
 	case 127:
 		if len(data) < 10 {
-			return nil, NewWsError("insufficient data for payload length", nil)
+			return nil, NewWsError("insufficient data for payload length")
 		}
 		frame.Length = binary.BigEndian.Uint64(data[2:10])
 		dataOffset = 10
@@ -154,7 +199,7 @@ func decodeFrame(data []byte) (*WsFrame, error) {
 	// If the frame is masked, extract the mask key
 	if frame.Mask {
 		if uint64(len(data)) < dataOffset+4 {
-			return nil, NewWsError("insufficient data for mask key", nil)
+			return nil, NewWsError("insufficient data for mask key")
 		}
 		copy(frame.MaskKey[:], data[dataOffset:dataOffset+4])
 		dataOffset += 4
@@ -162,7 +207,7 @@ func decodeFrame(data []byte) (*WsFrame, error) {
 
 	// Extract the payload
 	if uint64(len(data)) < dataOffset+frame.Length {
-		return nil, NewWsError("insufficient data for payload", nil)
+		return nil, NewWsError("insufficient data for payload")
 	}
 	payload := data[dataOffset : dataOffset+frame.Length]
 

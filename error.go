@@ -2,7 +2,6 @@ package hsp
 
 import (
 	"fmt"
-	"net"
 )
 
 type ServerError struct {
@@ -44,14 +43,13 @@ func NewHttpError(code int, msg string, request Request) *HttpError {
 }
 
 type WsError struct {
-	Msg  string
-	Conn *net.Conn
+	Msg string
 }
 
 func (e *WsError) Error() string {
 	return e.Msg
 }
 
-func NewWsError(msg string, conn *net.Conn) *WsError {
-	return &WsError{Msg: msg, Conn: conn}
+func NewWsError(msg string) *WsError {
+	return &WsError{Msg: msg}
 }

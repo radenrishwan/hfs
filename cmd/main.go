@@ -10,7 +10,7 @@ import (
 )
 
 var DEFAULT_LOGGER = slog.New(slog.NewTextHandler(os.Stderr, nil))
-var websocket = hsp.NewWebsocket()
+var websocket = hsp.NewWebsocket(nil)
 
 func main() {
 	slog.SetDefault(DEFAULT_LOGGER)
@@ -46,7 +46,27 @@ func main() {
 		// fmt.Println(req.Headers)
 
 		fmt.Println("Upgrading to websocket")
-		websocket.Upgrade(req)
+		client, err := websocket.Upgrade(req)
+		if err != nil {
+			panic(err)
+		}
+
+		for {
+			p, err := client.Read()
+			if err != nil {
+				client.Close()
+				slog.Error("Error while reading message", "ERROR", err)
+				break
+			}
+
+			err = client.Send("Hello, Client")
+			if err != nil {
+				slog.Error("Error while sending message", "ERROR", err)
+				break
+			}
+
+			fmt.Println("Received: ", string(p))
+		}
 
 		return &hsp.Response{
 			Code: 200,
