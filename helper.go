@@ -2,22 +2,19 @@ package hfs
 
 import (
 	"context"
-	"log/slog"
 	"net"
 	"strconv"
 	"strings"
 )
 
-func parseRequest(conn net.Conn) (request Request) {
+func parseRequest(conn net.Conn) (request Request, err error) {
 	buf := make([]byte, 1024)
 	request.Conn = conn
 	request.Context = context.Background()
 
-	_, err := conn.Read(buf)
+	_, err = conn.Read(buf)
 	if err != nil {
-		slog.Error("Error while reading from connection", "ERROR", err)
-
-		return request
+		return request, err
 	}
 
 	stringBuf := string(buf)
@@ -47,7 +44,7 @@ func parseRequest(conn net.Conn) (request Request) {
 	// parse args
 	request.Path, request.Args = parseArgs(requestLine[1])
 
-	return request
+	return request, err
 }
 
 func parseCookie(cookie string) map[string]string {
@@ -72,6 +69,14 @@ func headerString(headers map[string]string) string {
 }
 
 func writeResponse(response *Response, conn net.Conn) {
+	if response == nil {
+		response = NewResponse()
+	}
+
+	if response.Headers == nil {
+		response.Headers = make(map[string]string)
+	}
+
 	// check if header has a content-type
 	if _, ok := response.Headers["Content-Type"]; !ok {
 		response.Headers["Content-Type"] = "text/plain"

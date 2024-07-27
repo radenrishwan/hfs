@@ -81,8 +81,13 @@ func (s *Server) ListenAndServe() error {
 func (s *Server) handleConnection(conn net.Conn) {
 	defer conn.Close()
 
-	request := parseRequest(conn)
-	var err error
+	request, err := parseRequest(conn)
+	if err != nil {
+		response := s.ErrHandler(Request{Conn: conn}, err)
+		writeResponse(response, conn)
+		return
+	}
+
 	var response *Response
 
 	// find the handler for the request
