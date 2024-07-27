@@ -11,27 +11,33 @@
 
   <h1>Websocket UI</h1>
 
+  <p>Messages</p>
+  <ul id="messages"></ul>
+
   <script>
     const ws = new WebSocket('ws://localhost:3000/ws');
+    const messages = document.getElementById('messages');
 
     ws.onopen = () => {
-      console.log('Connected');
+      messages.innerHTML = '<li>Connected</li>';
+
       setInterval(() => {
         ws.send('Hello Server');
+        messages.innerHTML += '<li>Sending message to server</li>';
       }, 1000);
 
     };
 
     ws.onmessage = (message) => {
-      console.log('Received message:', message.data);
+      messages.innerHTML += `<li>Message from server: ${message.data}</li>`;
     };
 
     ws.onclose = () => {
-      console.log('Disconnected');
+      messages.innerHTML += '<li>Disconnected</li>';
     };
 
     ws.onerror = (error) => {
-      console.error('Error:', error);
+      messages.innerHTML += `<li>Error: ${error}</li>`;
     };
   </script>
 

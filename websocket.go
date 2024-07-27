@@ -1,4 +1,4 @@
-package hsp
+package hfs
 
 import (
 	"crypto/sha1"

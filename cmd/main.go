@@ -6,23 +6,23 @@ import (
 	"net/http"
 	"os"
 
-	hsp "github.com/radenrishwan/hfs"
+	"github.com/radenrishwan/hfs"
 )
 
-var DEFAULT_LOGGER = slog.New(slog.NewTextHandler(os.Stderr, nil))
-var websocket = hsp.NewWebsocket(nil)
+var DEFAULT_LOGGER = slog.New(slog.NewJSONHandler(os.Stderr, nil))
+var websocket = hfs.NewWebsocket(nil)
 
 func main() {
 	slog.SetDefault(DEFAULT_LOGGER)
 
-	server := hsp.NewServer("localhost:3000", hsp.Option{})
+	server := hfs.NewServer("localhost:3000", hfs.Option{})
 
-	server.SetErrHandler(func(req hsp.Request, err error) *hsp.Response {
+	server.SetErrHandler(func(req hfs.Request, err error) *hfs.Response {
 		slog.Error("Error while handling request", "ERROR", err)
 
-		if httpError, ok := err.(*hsp.HttpError); ok {
+		if httpError, ok := err.(*hfs.HttpError); ok {
 			if httpError.Code == http.StatusNotFound {
-				return &hsp.Response{
+				return &hfs.Response{
 					Code: 404,
 					Headers: map[string]string{
 						"Content-Type": "text/plain",
@@ -32,7 +32,7 @@ func main() {
 			}
 		}
 
-		return &hsp.Response{
+		return &hfs.Response{
 			Code: 500,
 			Headers: map[string]string{
 				"Content-Type": "text/plain",
@@ -41,10 +41,7 @@ func main() {
 		}
 	})
 
-	server.Handle("/ws", func(req hsp.Request) *hsp.Response {
-		// print headers
-		// fmt.Println(req.Headers)
-
+	server.Handle("/ws", func(req hfs.Request) *hfs.Response {
 		fmt.Println("Upgrading to websocket")
 		client, err := websocket.Upgrade(req)
 		if err != nil {
@@ -68,7 +65,7 @@ func main() {
 			fmt.Println("Received: ", string(p))
 		}
 
-		return &hsp.Response{
+		return &hfs.Response{
 			Code: 200,
 			Headers: map[string]string{
 				"Content-Type": "text/plain",
@@ -77,10 +74,10 @@ func main() {
 		}
 	})
 
-	server.Handle("/", func(req hsp.Request) *hsp.Response {
-		// panic(hsp.NewHttpError(500, "Internal Server Error", req))
+	server.Handle("GET /", func(req hfs.Request) *hfs.Response {
+		// panic(hfs.NewHttpError(500, "Internal Server Error", req))
 
-		return &hsp.Response{
+		return &hfs.Response{
 			Code: 200,
 			Headers: map[string]string{
 				"Content-Type": "text/plain",
@@ -89,10 +86,10 @@ func main() {
 		}
 	})
 
-	server.Handle("GET /cookie", func(req hsp.Request) *hsp.Response {
+	server.Handle("GET /cookie", func(req hfs.Request) *hfs.Response {
 		fmt.Println(req.Cookie)
 
-		response := hsp.NewResponse()
+		response := hfs.NewResponse()
 		response.SetCode(200)
 		response.AddHeader("Content-Type", "text/plain")
 		response.SetBody("Hello, World!")
@@ -103,8 +100,8 @@ func main() {
 		return response
 	})
 
-	server.Handle("/about", func(req hsp.Request) *hsp.Response {
-		return &hsp.Response{
+	server.Handle("/about", func(req hfs.Request) *hfs.Response {
+		return &hfs.Response{
 			Code: 200,
 			Headers: map[string]string{
 				"Content-Type": "text/plain",
@@ -113,24 +110,24 @@ func main() {
 		}
 	})
 
-	server.Handle("/args", func(req hsp.Request) *hsp.Response {
-		response := hsp.NewResponse()
+	server.Handle("/args", func(req hfs.Request) *hfs.Response {
+		response := hfs.NewResponse()
 		response.SetCode(200)
 		response.SetBody(req.Args["name"])
 
 		return response
 	})
 
-	server.Handle("GET /get", func(req hsp.Request) *hsp.Response {
-		response := hsp.NewResponse()
+	server.Handle("GET /get", func(req hfs.Request) *hfs.Response {
+		response := hfs.NewResponse()
 		response.SetCode(200)
 		response.SetBody("GET")
 
 		return response
 	})
 
-	server.Handle("POST /post", func(req hsp.Request) *hsp.Response {
-		response := hsp.NewResponse()
+	server.Handle("POST /post", func(req hfs.Request) *hfs.Response {
+		response := hfs.NewResponse()
 		response.SetCode(200)
 		response.SetBody("POST")
 
