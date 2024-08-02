@@ -53,7 +53,7 @@ func main() {
 			if err != nil {
 				client.Close()
 				slog.Error("Error while reading message", "ERROR", err)
-				break
+
 			}
 
 			err = client.Send("Hello, Client")

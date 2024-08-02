@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log/slog"
+	"os"
 	"strconv"
 	"time"
 
@@ -94,9 +95,18 @@ func main() {
 	go room.Pool()
 
 	server.Handle("GET /", func(req hfs.Request) *hfs.Response {
+		n, err := os.ReadFile("chat.html")
+		if err != nil {
+			return &hfs.Response{
+				Code: 500,
+				Body: "Failed reading index.html",
+			}
+		}
+
 		resp := hfs.NewResponse()
 		resp.Code = 200
-		resp.Body = "OK"
+		resp.Headers["Content-Type"] = "text/html"
+		resp.Body = string(n)
 
 		return resp
 	})

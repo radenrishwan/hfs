@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chat App</title>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+</head>
+
+<body class="bg-gray-200 h-screen">
+  <div class="container mx-auto p-4 pt-6 h-screen flex flex-col">
+    <!-- Header -->
+    <header class="flex justify-between items-center bg-white p-4 rounded-t-lg shadow-md">
+      <h1 class="text-lg font-bold">Chat App</h1>
+      <button id="connect" onclick="connect()"
+        class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
+        Connect
+      </button>
+    </header>
+
+    <!-- Chat List -->
+    <div class="flex-1 overflow-y-auto p-4">
+      <ul id="chat-list">
+      </ul>
+    </div>
+
+    <!-- Chat Input -->
+    <div class="bg-white p-4 rounded-b-lg shadow-md">
+      <input class="w-full p-4 border border-gray-300 rounded-lg focus:outline-none focus:ring focus:border-blue-500"
+        type="text" placeholder="Type your message...">
+      <button class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded mt-4" id="send">
+        Send
+      </button>
+    </div>
+  </div>
+
+
+  <script>
+    var socket
+    const connectBtn = document.getElementById('connect');
+    const sendBtn = document.getElementById('send');
+    const chatList = document.getElementById('chat-list');
+
+    function connect() {
+      socket = new WebSocket('ws://localhost:8080/ws');
+
+      socket.onopen = function (event) {
+        addNotify('Connected to server!');
+      };
+
+      socket.onmessage = function (event) {
+        addMessageIncomming(event.data);
+      };
+
+      socket.onclose = function (event) {
+        addNotify('Connection closed!');
+        sendBtn.disabled = true;
+      };
+
+      socket.onerror = function (event) {
+        addNotify('Error: ' + event.data);
+        sendBtn.disabled = true;
+      };
+    }
+
+    sendBtn.addEventListener('click', function () {
+      const message = document.querySelector('input')
+      addMessage(message.value);
+      socket.send(message.value);
+      message.value = '';
+    });
+
+    function addMessage(message) {
+      const li = document.createElement('li');
+      li.classList.add('mb-4');
+
+      const div = document.createElement('div');
+      div.classList.add('flex', 'justify-end', 'items-center');
+
+      const messageDiv = document.createElement('div');
+      messageDiv.classList.add('mr-4', 'bg-blue-50', 'p-4', 'rounded-lg', 'shadow-sm');
+
+      const user = document.createElement('p');
+      user.classList.add('text-lg', 'font-bold');
+      user.textContent = 'You';
+
+      const text = document.createElement('p');
+      text.classList.add('text-gray-600');
+      text.textContent = message;
+
+      messageDiv.appendChild(user);
+      messageDiv.appendChild(text);
+
+      const img = document.createElement('img');
+      img.classList.add('w-8', 'h-8', 'rounded-full');
+      img.src = 'https://via.placeholder.com/150/8649e3';
+      img.alt = 'User Avatar';
+
+      div.appendChild(messageDiv);
+      div.appendChild(img);
+
+      li.appendChild(div);
+
+      chatList.appendChild(li);
+    }
+
+    function addMessageIncomming(message) {
+      const li = document.createElement('li');
+      li.classList.add('mb-4');
+
+      const div = document.createElement('div');
+      div.classList.add('flex', 'justify-start', 'items-center');
+
+      const img = document.createElement('img');
+      img.classList.add('w-8', 'h-8', 'rounded-full');
+      img.src = 'https://via.placeholder.com/150/8649e3';
+      img.alt = 'User Avatar';
+
+      const messageDiv = document.createElement('div');
+      messageDiv.classList.add('ml-4', 'bg-gray-50', 'p-4', 'rounded-lg', 'shadow-sm');
+
+      const user = document.createElement('p');
+      user.classList.add('text-lg', 'font-bold');
+      user.textContent = 'User';
+
+      const text = document.createElement('p');
+      text.classList.add('text-gray-600');
+      text.textContent = message;
+
+      messageDiv.appendChild(user);
+      messageDiv.appendChild(text);
+
+      div.appendChild(img);
+      div.appendChild(messageDiv);
+
+      li.appendChild(div);
+
+      chatList.appendChild(li);
+    }
+
+    function addNotify(message) {
+      const li = document.createElement('li');
+      li.classList.add('mb-4', 'text-center');
+
+      const div = document.createElement('div');
+      div.classList.add('bg-gray-100', 'p-2', 'rounded-lg', 'shadow-sm', 'text-gray-600');
+      div.textContent = message;
+
+      li.appendChild(div);
+
+      chatList.appendChild(li);
+    }
+  </script>
+</body>
+
+</html>
