@@ -1,8 +1,10 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"os"
 	"strconv"
 	"time"
@@ -10,156 +12,220 @@ import (
 	"github.com/radenrishwan/hfs"
 )
 
-type MsgType string
+var DEFAULT_LOGGER = slog.New(slog.NewJSONHandler(os.Stderr, nil))
+var websocket = hfs.NewWebsocket(nil)
 
 const (
-	JOIN  MsgType = "JOIN"
-	LEAVE MsgType = "LEAVE"
-	MSG   MsgType = "MSG"
+	MSG        = 0
+	JOIN       = 1
+	LEAVE      = 2
+	PRIVATEMSG = 3
+	TYPING     = 4
+	STOPTYPING = 5
 )
 
-type Msg struct {
-	Type MsgType
-	Body string
-	From User
-}
-
 type User struct {
+	Id   string
 	Name string
 	Conn hfs.Client
 }
 
-type Room struct {
-	Name  string
-	Users map[string]User
-	Msg   chan Msg
-	Leave chan Msg
-	Join  chan Msg
-}
-
-func (room *Room) Add(user User) {
-	room.Users[user.Name] = user
-
-	room.Broadcast(Msg{
-		Type: JOIN,
-		Body: user.Name + " has joined",
-		From: user,
-	})
-}
-
-func (room *Room) Remove(name string) {
-	delete(room.Users, name)
-
-	room.Broadcast(Msg{
-		Type: LEAVE,
-		Body: name + " has left",
-		From: room.Users[name],
-	})
-}
-
-func (room *Room) Broadcast(msg Msg) {
-	for _, c := range room.Users {
-		if msg.From.Name == c.Name {
-			continue
-		}
-		c.Conn.Send(msg.From.Name + ": " + msg.Body)
+func NewUser(id string, name string, conn hfs.Client) *User {
+	return &User{
+		Id:   id,
+		Name: name,
+		Conn: conn,
 	}
 }
 
-func (room *Room) Pool() {
-	fmt.Println("Running room Pool: ", room.Name)
+type Message struct {
+	Type    int    `json:"type"`
+	Content string `json:"content"`
+	From    string `json:"from"`
+}
+
+func NewMessage(t int, c string, f string) *Message {
+	return &Message{
+		Type:    t,
+		Content: c,
+		From:    f,
+	}
+}
+
+func (m *Message) ToJson() string {
+	output, _ := json.Marshal(m)
+
+	return string(output)
+}
+
+type UserMessage struct {
+	Type    int    `json:"type"`
+	Content string `json:"content"`
+}
+
+func NewUserMessage() *UserMessage {
+	return &UserMessage{}
+}
+
+func (m *UserMessage) FromJson(data string) error {
+	return json.Unmarshal([]byte(data), m)
+}
+
+type Pool struct {
+	Register   chan *User
+	Unregister chan *User
+	Message    chan *Message
+	Users      map[string]*User
+}
+
+func NewPool() *Pool {
+	return &Pool{
+		Register:   make(chan *User),
+		Unregister: make(chan *User),
+		Message:    make(chan *Message),
+		Users:      make(map[string]*User), // TODO: add r/w mutex
+	}
+}
+
+func (p *Pool) ListUsers() string {
+	result := ""
+	for _, u := range p.Users {
+		result += fmt.Sprintf("%s-%s\n", u.Id, u.Name)
+	}
+
+	return result
+}
+
+func (p *Pool) Start() {
 	for {
 		select {
-		case msg := <-room.Msg:
-			room.Broadcast(msg)
-		case msg := <-room.Leave:
-			room.Remove(msg.From.Name)
-		case msg := <-room.Join:
-			room.Add(msg.From)
+		case user := <-p.Register:
+			p.Users[user.Id] = user
+			for _, u := range p.Users {
+				u.Conn.Send(NewMessage(JOIN, p.ListUsers(), user.Name).ToJson())
+			}
+			break
+		case user := <-p.Unregister:
+			delete(p.Users, user.Id)
+			for _, u := range p.Users {
+				u.Conn.Send(NewMessage(LEAVE, p.ListUsers(), user.Name).ToJson())
+			}
+		case message := <-p.Message:
+			for _, u := range p.Users {
+				u.Conn.Send(message.ToJson())
+			}
 		}
 	}
 }
 
-var ws = hfs.NewWebsocket(&hfs.DefaultWSOption)
-
 func main() {
+	pool := NewPool()
+	slog.SetDefault(DEFAULT_LOGGER)
+
+	go pool.Start()
 	server := hfs.NewServer("localhost:8080", hfs.Option{})
 
-	var room = Room{
-		Name:  "General",
-		Users: make(map[string]User),
-		Msg:   make(chan Msg),
-		Leave: make(chan Msg),
-		Join:  make(chan Msg),
-	}
-	go room.Pool()
+	server.SetErrHandler(func(req hfs.Request, err error) *hfs.Response {
+		slog.Error("Error while handling request", "ERROR", err)
 
-	server.Handle("GET /", func(req hfs.Request) *hfs.Response {
-		n, err := os.ReadFile("chat.html")
-		if err != nil {
+		if httpError, ok := err.(*hfs.HttpError); ok {
+			if httpError.Code == http.StatusNotFound {
+				return &hfs.Response{
+					Code: 404,
+					Headers: map[string]string{
+						"Content-Type": "text/plain",
+					},
+					Body: "Not Found",
+				}
+			}
+
 			return &hfs.Response{
-				Code: 500,
-				Body: "Failed reading index.html",
+				Code: httpError.Code,
+				Headers: map[string]string{
+					"Content-Type": "text/plain",
+				},
+				Body: httpError.Msg,
 			}
 		}
 
-		resp := hfs.NewResponse()
-		resp.Code = 200
-		resp.Headers["Content-Type"] = "text/html"
-		resp.Body = string(n)
-
-		return resp
+		return &hfs.Response{
+			Code: 500,
+			Headers: map[string]string{
+				"Content-Type": "text/plain",
+			},
+			Body: "Internal Server Error",
+		}
 	})
 
-	server.Handle("GET /ws", func(req hfs.Request) *hfs.Response {
-		client, err := ws.Upgrade(req)
-		if err != nil {
-			return &hfs.Response{
-				Code: 500,
-				Body: "Failed upgrading to websocket",
-			}
-		}
-
+	server.Handle("/ws", func(req hfs.Request) *hfs.Response {
 		user := User{
-			Name: strconv.Itoa(time.Now().Nanosecond()),
-			Conn: client,
+			Id: strconv.Itoa(int(time.Now().UnixNano())),
+		}
+		user.Name = req.GetArgs("name")
+		if user.Name == "" {
+			user.Name = user.Id
 		}
 
-		client.Send("Welcome to the chat room")
-
-		room.Join <- Msg{
-			Type: JOIN,
-			Body: "",
-			From: user,
+		client, err := websocket.Upgrade(req)
+		user.Conn = client
+		if err != nil {
+			slog.Error("Error while upgrading to websocket", "ERROR", err)
+			panic(hfs.NewHttpError(http.StatusInternalServerError, "error while upgrading ws", req))
 		}
+		pool.Register <- &user
 
-		slog.Info("User joined", "USER", user)
+		client.Send(NewMessage(PRIVATEMSG, "", user.Name).ToJson())
+
 		for {
 			msg, err := client.Read()
 			if err != nil {
-				slog.Error("Error while reading message", "ERROR", err)
-				room.Leave <- Msg{
-					Type: LEAVE,
-					Body: "",
-					From: user,
-				}
+				client.Close()
+				pool.Unregister <- &user
+				slog.Error("Error while reading message on read", "ERROR", err)
 				break
 			}
 
-			room.Msg <- Msg{
-				Type: MSG,
-				Body: string(msg),
-				From: user,
+			fmt.Println("Message from client:", string(msg))
+
+			userMSG := NewUserMessage()
+			err = userMSG.FromJson(string(msg))
+			if err != nil {
+				slog.Error("Error while unmarshalling message", "ERROR", err)
+				continue
+			}
+
+			switch userMSG.Type {
+			case TYPING:
+				pool.Message <- NewMessage(TYPING, "", user.Name)
+			case STOPTYPING:
+				pool.Message <- NewMessage(STOPTYPING, "", user.Name)
+			default:
+				pool.Message <- NewMessage(MSG, userMSG.Content, user.Name)
 			}
 		}
 
 		return &hfs.Response{
 			Code: 200,
-			Body: "OK",
+			Headers: map[string]string{
+				"Content-Type": "text/plain",
+			},
+			Body: "Websocket",
 		}
 	})
 
-	if err := server.ListenAndServe(); err != nil {
-		slog.Error("Error while listening to address", "ERROR", err)
+	server.Handle("GET /", func(req hfs.Request) *hfs.Response {
+		html, err := os.ReadFile("html/chat.html")
+		if err != nil {
+			slog.Error("Error while reading file", "ERROR", err)
+
+			return hfs.NewTextResponse("Error bang")
+		}
+
+		return hfs.NewHTMLResponse(string(html))
+	})
+
+	err := server.ListenAndServe()
+	if err != nil {
+		slog.Error("Error while listening and serving", "ERROR", err)
 	}
 }

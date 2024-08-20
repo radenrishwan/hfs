@@ -1,157 +1,245 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Chat Application</title>
+        <script src="https://cdn.tailwindcss.com"></script>
+    </head>
 
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Chat App</title>
-  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
-</head>
+    <body class="bg-gray-100">
+        <main
+            id="chat"
+            class="container mx-auto h-screen flex flex-col justify-center items-center"
+        >
+            <div
+                id="connection-area"
+                class="bg-white shadow-md rounded px-8 pt-6 pb-8 mb-4 w-1/2"
+            >
+                <input
+                    type="text"
+                    id="username"
+                    placeholder="Enter your username"
+                    class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 mb-4 leading-tight focus:outline-none focus:shadow-outline"
+                />
+                <button
+                    id="connect-btn"
+                    class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
+                >
+                    Connect
+                </button>
+            </div>
+            <div
+                id="chat-window"
+                class="hidden bg-white shadow-md rounded px-8 pt-6 pb-8 mb-4 w-1/2"
+            >
+                <div id="output" class="mb-4 h-48 overflow-y-auto">
+                    <ul id="chat-display" class="list-none p-0"></ul>
+                    <div
+                        id="typing-indicator"
+                        class="text-gray-500 text-sm"
+                    ></div>
+                </div>
+                <div class="flex">
+                    <input
+                        type="text"
+                        id="message"
+                        placeholder="Message"
+                        class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+                    />
+                    <button
+                        id="send"
+                        class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline ml-2"
+                    >
+                        Send
+                    </button>
+                </div>
+                <div
+                    id="user-list-area"
+                    class="mt-4 border-t border-gray-300 pt-4"
+                >
+                    <strong class="text-gray-700">Online Users:</strong>
+                    <ul id="user-list" class="list-none p-0"></ul>
+                </div>
+            </div>
+        </main>
 
-<body class="bg-gray-200 h-screen">
-  <div class="container mx-auto p-4 pt-6 h-screen flex flex-col">
-    <!-- Header -->
-    <header class="flex justify-between items-center bg-white p-4 rounded-t-lg shadow-md">
-      <h1 class="text-lg font-bold">Chat App</h1>
-      <button id="connect" onclick="connect()"
-        class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
-        Connect
-      </button>
-    </header>
+        <script>
+            let ws; // Store the WebSocket instance
+            let username; // Store the username
+            let isTyping = false; // Flag to track typing state
+            let typingUsers = []; // Array to store typing users
 
-    <!-- Chat List -->
-    <div class="flex-1 overflow-y-auto p-4">
-      <ul id="chat-list">
-      </ul>
-    </div>
+            const chatDisplay = document.getElementById("chat-display");
+            const typingIndicator = document.getElementById("typing-indicator");
+            const chatWindow = document.getElementById("chat-window");
+            const connectBtn = document.getElementById("connect-btn");
+            const connectionArea = document.getElementById("connection-area");
+            const usernameInput = document.getElementById("username");
+            const messageInput = document.getElementById("message");
+            const userList = document.getElementById("user-list");
 
-    <!-- Chat Input -->
-    <div class="bg-white p-4 rounded-b-lg shadow-md">
-      <input class="w-full p-4 border border-gray-300 rounded-lg focus:outline-none focus:ring focus:border-blue-500"
-        type="text" placeholder="Type your message...">
-      <button class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded mt-4" id="send">
-        Send
-      </button>
-    </div>
-  </div>
+            connectBtn.addEventListener("click", () => {
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.close();
+                } else {
+                    username = usernameInput.value.trim();
+                    if (username === "") {
+                        alert("Please enter a username.");
+                        return;
+                    }
 
+                    ws = new WebSocket(
+                        "ws://localhost:8080/ws?name=" + username,
+                    );
 
-  <script>
-    var socket
-    const connectBtn = document.getElementById('connect');
-    const sendBtn = document.getElementById('send');
-    const chatList = document.getElementById('chat-list');
+                    ws.onopen = () => {
+                        console.log("Connected to the server");
+                        connectBtn.textContent = "Disconnect";
+                        connectBtn.classList.remove(
+                            "bg-blue-500",
+                            "hover:bg-blue-700",
+                        );
+                        connectBtn.classList.add(
+                            "bg-red-500",
+                            "hover:bg-red-700",
+                        );
+                        chatWindow.classList.remove("hidden");
+                        // connectionArea.classList.add("hidden");
+                        usernameInput.classList.add("hidden");
+                    };
 
-    function connect() {
-      socket = new WebSocket('ws://localhost:8080/ws');
+                    ws.onmessage = (message) => {
+                        const msg = JSON.parse(message.data);
 
-      socket.onopen = function (event) {
-        addNotify('Connected to server!');
-      };
+                        const messageElement = document.createElement("li");
+                        messageElement.classList.add("mb-2");
 
-      socket.onmessage = function (event) {
-        addMessageIncomming(event.data);
-      };
+                        if (msg.type === 1) {
+                            messageElement.textContent = `${msg.from} joined the server`;
+                            messageElement.classList.add("text-green-500");
+                            chatDisplay.appendChild(messageElement);
+                            // reload user list here
+                            userList.innerHTML = "";
+                            const users = msg.content.split("\n");
+                            users.forEach((user) => {
+                                const li = document.createElement("li");
+                                li.textContent = user;
+                                userList.appendChild(li);
+                            });
+                        } else if (msg.type === 2) {
+                            messageElement.textContent = `${msg.from} left the server`;
+                            messageElement.classList.add("text-red-500");
+                            chatDisplay.appendChild(messageElement);
+                            // reload user list here
+                            userList.innerHTML = "";
+                            const users = msg.content.split("\n");
+                            users.forEach((user) => {
+                                const li = document.createElement("li");
+                                li.textContent = user;
+                                userList.appendChild(li);
+                            });
+                        } else if (msg.type == 3) {
+                            username = msg.from;
+                        } else if (msg.type === 4) {
+                            // Handle typing event
+                            if (!typingUsers.includes(msg.from)) {
+                                typingUsers.push(msg.from);
+                            }
+                            updateTypingIndicator();
+                        } else if (msg.type === 5) {
+                            // Handle stop typing event
+                            const index = typingUsers.indexOf(msg.from);
+                            if (index > -1) {
+                                typingUsers.splice(index, 1);
+                            }
+                            updateTypingIndicator();
+                        } else {
+                            messageElement.textContent = `${msg.from}: ${msg.content}`;
+                            chatDisplay.appendChild(messageElement);
+                        }
 
-      socket.onclose = function (event) {
-        addNotify('Connection closed!');
-        sendBtn.disabled = true;
-      };
+                        chatDisplay.scrollTop = chatDisplay.scrollHeight;
+                    };
 
-      socket.onerror = function (event) {
-        addNotify('Error: ' + event.data);
-        sendBtn.disabled = true;
-      };
-    }
+                    ws.onclose = () => {
+                        console.log("Disconnected from the server");
+                        connectBtn.textContent = "Connect";
+                        connectBtn.classList.add(
+                            "bg-blue-500",
+                            "hover:bg-blue-700",
+                        );
+                        connectBtn.classList.remove(
+                            "bg-red-500",
+                            "hover:bg-red-700",
+                        );
+                        chatWindow.classList.add("hidden");
+                        // connectionArea.classList.remove("hidden");
+                        usernameInput.classList.remove("hidden");
+                        ws = null;
 
-    sendBtn.addEventListener('click', function () {
-      const message = document.querySelector('input')
-      addMessage(message.value);
-      socket.send(message.value);
-      message.value = '';
-    });
+                        // clear chat display
+                        chatDisplay.innerHTML = "";
+                    };
 
-    function addMessage(message) {
-      const li = document.createElement('li');
-      li.classList.add('mb-4');
+                    messageInput.addEventListener("keyup", function (event) {
+                        if (event.key === "Enter") {
+                            event.preventDefault();
+                            document.getElementById("send").click();
+                        }
+                    });
 
-      const div = document.createElement('div');
-      div.classList.add('flex', 'justify-end', 'items-center');
+                    // on typing
+                    messageInput.addEventListener("input", function (event) {
+                        if (!isTyping) {
+                            isTyping = true;
+                            ws.send(
+                                JSON.stringify({ type: 4, from: username }),
+                            );
+                        }
+                    });
 
-      const messageDiv = document.createElement('div');
-      messageDiv.classList.add('mr-4', 'bg-blue-50', 'p-4', 'rounded-lg', 'shadow-sm');
+                    // on stop typing
+                    messageInput.addEventListener("blur", function (event) {
+                        if (isTyping) {
+                            isTyping = false;
+                            ws.send(
+                                JSON.stringify({ type: 5, from: username }),
+                            );
+                        }
+                    });
 
-      const user = document.createElement('p');
-      user.classList.add('text-lg', 'font-bold');
-      user.textContent = 'You';
+                    document
+                        .getElementById("send")
+                        .addEventListener("click", () => {
+                            const messageInput =
+                                document.getElementById("message");
+                            const message = messageInput.value.trim();
+                            if (message === "") {
+                                return;
+                            }
 
-      const text = document.createElement('p');
-      text.classList.add('text-gray-600');
-      text.textContent = message;
+                            messageInput.value = "";
+                            ws.send(
+                                JSON.stringify({ type: 0, content: message }),
+                            );
+                        });
+                }
+            });
 
-      messageDiv.appendChild(user);
-      messageDiv.appendChild(text);
-
-      const img = document.createElement('img');
-      img.classList.add('w-8', 'h-8', 'rounded-full');
-      img.src = 'https://via.placeholder.com/150/8649e3';
-      img.alt = 'User Avatar';
-
-      div.appendChild(messageDiv);
-      div.appendChild(img);
-
-      li.appendChild(div);
-
-      chatList.appendChild(li);
-    }
-
-    function addMessageIncomming(message) {
-      const li = document.createElement('li');
-      li.classList.add('mb-4');
-
-      const div = document.createElement('div');
-      div.classList.add('flex', 'justify-start', 'items-center');
-
-      const img = document.createElement('img');
-      img.classList.add('w-8', 'h-8', 'rounded-full');
-      img.src = 'https://via.placeholder.com/150/8649e3';
-      img.alt = 'User Avatar';
-
-      const messageDiv = document.createElement('div');
-      messageDiv.classList.add('ml-4', 'bg-gray-50', 'p-4', 'rounded-lg', 'shadow-sm');
-
-      const user = document.createElement('p');
-      user.classList.add('text-lg', 'font-bold');
-      user.textContent = 'User';
-
-      const text = document.createElement('p');
-      text.classList.add('text-gray-600');
-      text.textContent = message;
-
-      messageDiv.appendChild(user);
-      messageDiv.appendChild(text);
-
-      div.appendChild(img);
-      div.appendChild(messageDiv);
-
-      li.appendChild(div);
-
-      chatList.appendChild(li);
-    }
-
-    function addNotify(message) {
-      const li = document.createElement('li');
-      li.classList.add('mb-4', 'text-center');
-
-      const div = document.createElement('div');
-      div.classList.add('bg-gray-100', 'p-2', 'rounded-lg', 'shadow-sm', 'text-gray-600');
-      div.textContent = message;
-
-      li.appendChild(div);
-
-      chatList.appendChild(li);
-    }
-  </script>
-</body>
-
+            function updateTypingIndicator() {
+                if (typingUsers.length > 0) {
+                    if (typingUsers.length === 1) {
+                        typingIndicator.textContent = `${typingUsers[0]} is typing...`;
+                    } else if (typingUsers.length === 2) {
+                        typingIndicator.textContent = `${typingUsers[0]} and ${typingUsers[1]} are typing...`;
+                    } else {
+                        typingIndicator.textContent = `${typingUsers[0]}, ${typingUsers[1]} and ${typingUsers.length - 2} others are typing...`;
+                    }
+                } else {
+                    typingIndicator.textContent = "";
+                }
+            }
+        </script>
+    </body>
 </html>
