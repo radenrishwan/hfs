@@ -17,6 +17,30 @@ func NewResponse() *Response {
 	}
 }
 
+func NewTextResponse(text string) *Response {
+	header := map[string]string{
+		"Content-Type": "text/plain",
+	}
+
+	return &Response{
+		Code:    200,
+		Headers: header,
+		Body:    "",
+	}
+}
+
+func NewHTMLResponse(html string) *Response {
+	header := map[string]string{
+		"Content-Type": "text/html",
+	}
+
+	return &Response{
+		Code:    200,
+		Headers: header,
+		Body:    html,
+	}
+}
+
 func (r *Response) AddHeader(key, value string) {
 	r.Headers[key] = value
 }
