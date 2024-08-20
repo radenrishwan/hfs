@@ -107,6 +107,11 @@ func (client *Client) Read() ([]byte, error) {
 		return nil, NewWsError("Error decoding frame : " + err.Error())
 	}
 
+	// check if close signal
+	if f.Opcode == 0x8 {
+		return nil, NewWsError("Close signal received")
+	}
+
 	return f.Payload, nil
 }
 
