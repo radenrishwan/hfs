@@ -10,6 +10,41 @@ import (
 
 const MAGIC_KEY = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 
+type MessageType int
+
+const (
+	TEXT MessageType = iota
+	BINARY
+	PING
+	PONG
+	CLOSE
+)
+
+const (
+	MESSAGE_FRAME = 0x81
+	BINARY_FRAME  = 0x82
+	PING_FRAME    = 0x89
+	PONG_FRAME    = 0x8A
+	CLOSE_FRAME   = 0x88
+)
+
+const (
+	STATUS_CLOSE_NORMAL_CLOSUE         = 1000
+	STATUS_CLOSE_GOING_AWAY            = 1001
+	STATUS_CLOSE_PROTOCOL_ERR          = 1002
+	STATUS_CLOSE_UNSUPPORTED           = 1003
+	STATUS_CLOSE_NO_STATUS             = 1005
+	STATUS_CLOSE_ABNORMAL_CLOSUE       = 1006
+	STATUS_CLOSE_INVALID_PAYLOAD       = 1007
+	STATUS_CLOSE_POLICY_VIOLATION      = 1008
+	STATUS_CLOSE_MESSAGE_TOO_BIG       = 1009
+	STATUS_CLOSE_MANDATORY_EXTENSION   = 1010
+	STATUS_CLOSE_INTERNAL_SERVER_ERROR = 1011
+	STATUS_CLOSE_SERVICE_RESTART       = 1012
+	STATUS_CLOSE_TRY_AGAIN_LATER       = 1013
+	STATUS_CLOSE_TLS_HANDSHAKE         = 1015
+)
+
 type Websocket struct {
 	Option *WSOption
 }
@@ -84,7 +119,7 @@ func (ws *Websocket) Upgrade(request Request) (client Client, err error) {
 }
 
 func (client *Client) Send(msg string) error {
-	frame := encodeFrame([]byte(msg))
+	frame := encodeFrame([]byte(msg), TEXT)
 
 	_, err := client.Conn.Write(frame)
 	if err != nil {
@@ -95,7 +130,18 @@ func (client *Client) Send(msg string) error {
 }
 
 func (client *Client) SendBytes(msg []byte) error {
-	frame := encodeFrame(msg)
+	frame := encodeFrame(msg, TEXT)
+
+	_, err := client.Conn.Write(frame)
+	if err != nil {
+		return NewWsError("Error sending message : " + err.Error())
+	}
+
+	return nil
+}
+
+func (client *Client) SendWithMessageType(msg string, messageType MessageType) error {
+	frame := encodeFrame([]byte(msg), messageType)
 
 	_, err := client.Conn.Write(frame)
 	if err != nil {
@@ -127,7 +173,9 @@ func (client *Client) Read() ([]byte, error) {
 }
 
 func (client *Client) Close() error {
-	// TODO: Send close signal
+	// send close normal closue
+	// client.SendWithMessageType("", STATUS_CLOSE_NORMAL_CLOSUE)
+
 	err := client.Conn.Close()
 	if err != nil {
 		return NewWsError("Error closing connection : " + err.Error())
@@ -144,9 +192,22 @@ func generateWebsocketKey(key string) string {
 	return base64.StdEncoding.EncodeToString(sha.Sum(nil))
 }
 
-func encodeFrame(msg []byte) []byte {
+func encodeFrame(msg []byte, messageType MessageType) []byte {
 	frame := make([]byte, 0)
-	frame = append(frame, 0x81) // FIN, Opcode 1 (text frame)
+	switch messageType {
+	case TEXT:
+		frame = append(frame, MESSAGE_FRAME)
+	case BINARY:
+		frame = append(frame, BINARY_FRAME)
+	case PING:
+		frame = append(frame, PING_FRAME)
+	case PONG:
+		frame = append(frame, PONG_FRAME)
+	case CLOSE:
+		frame = append(frame, CLOSE_FRAME)
+	default:
+		frame = append(frame, MESSAGE_FRAME)
+	}
 
 	length := len(msg)
 	if length < 126 {
