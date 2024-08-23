@@ -94,6 +94,17 @@ func (client *Client) Send(msg string) error {
 	return nil
 }
 
+func (client *Client) SendBytes(msg []byte) error {
+	frame := encodeFrame(msg)
+
+	_, err := client.Conn.Write(frame)
+	if err != nil {
+		return NewWsError("Error sending message : " + err.Error())
+	}
+
+	return nil
+}
+
 func (client *Client) Read() ([]byte, error) {
 	buf := make([]byte, client.option.MsgMaxSize)
 
@@ -150,14 +161,9 @@ func encodeFrame(msg []byte) []byte {
 		frame = append(frame, 127)
 
 		// add length as 64-bit unsigned integer
-		frame = append(frame, byte(length>>56))
-		frame = append(frame, byte(length>>48&0xFF))
-		frame = append(frame, byte(length>>40&0xFF))
-		frame = append(frame, byte(length>>32&0xFF))
-		frame = append(frame, byte(length>>24&0xFF))
-		frame = append(frame, byte(length>>16&0xFF))
-		frame = append(frame, byte(length>>8&0xFF))
-		frame = append(frame, byte(length&0xFF))
+		for i := 7; i >= 0; i-- {
+			frame = append(frame, byte(length>>(i*8)))
+		}
 	}
 
 	frame = append(frame, msg...)
