@@ -134,5 +134,14 @@ func main() {
 		return response
 	})
 
+	err := server.ServeDir("GET /file", "html/")
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	for _, s := range server.Handlers {
+		fmt.Println(s.Path)
+	}
+
 	server.ListenAndServe()
 }

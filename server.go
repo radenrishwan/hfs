@@ -3,6 +3,8 @@ package hfs
 import (
 	"log/slog"
 	"net"
+	"net/http"
+	"os"
 )
 
 type ResponseHandler func(Request) *Response
@@ -149,4 +151,73 @@ func (s *Server) Handle(path string, handler ResponseHandler) error {
 
 func (s *Server) SetErrHandler(handler ErrResponseHandler) {
 	s.ErrHandler = handler
+}
+
+func (s *Server) ServeFile(path string, filePath string) error {
+	file, err := os.ReadFile(filePath)
+	if err != nil {
+		return NewServerError("Error while reading file: " + err.Error())
+	}
+
+	fileType := http.DetectContentType(file)
+
+	return s.Handle(path, func(req Request) *Response {
+		return &Response{
+			Code: 200,
+			Headers: map[string]string{
+				"Content-Type": fileType,
+			},
+			Body: string(file),
+		}
+	})
+}
+
+// ServeFile serves a file at the given path
+//
+// server.ServeFile("GET /hello", "path/to/dir")
+func (s *Server) ServeDir(prefixPath string, filePath string) error {
+	// check last character of the path
+	if filePath[len(filePath)-1] == '/' {
+		filePath = filePath[:len(filePath)-1]
+	}
+
+	if prefixPath[len(prefixPath)-1] == '/' {
+		prefixPath = prefixPath[:len(prefixPath)-1]
+	}
+
+	// get all files in the directory
+	files, err := os.ReadDir(filePath)
+	if err != nil {
+		return NewServerError("Error while reading directory: " + err.Error())
+	}
+
+	for _, file := range files {
+		if file.IsDir() {
+			continue
+		}
+
+		// read file
+		output, err := os.ReadFile(filePath + "/" + file.Name())
+		if err != nil {
+			return NewServerError("Error while reading file: " + err.Error())
+		}
+
+		fileType := http.DetectContentType(output)
+
+		err = s.Handle(prefixPath+"/"+file.Name(), func(req Request) *Response {
+			return &Response{
+				Code: 200,
+				Headers: map[string]string{
+					"Content-Type": fileType,
+				},
+				Body: string(output),
+			}
+		})
+
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
