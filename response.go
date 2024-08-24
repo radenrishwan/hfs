@@ -25,7 +25,7 @@ func NewTextResponse(text string) *Response {
 	return &Response{
 		Code:    200,
 		Headers: header,
-		Body:    "",
+		Body:    text,
 	}
 }
 
@@ -38,6 +38,18 @@ func NewHTMLResponse(html string) *Response {
 		Code:    200,
 		Headers: header,
 		Body:    html,
+	}
+}
+
+func NewJSONResponse(json string) *Response {
+	header := map[string]string{
+		"Content-Type": "application/json",
+	}
+
+	return &Response{
+		Code:    200,
+		Headers: header,
+		Body:    json,
 	}
 }
 
