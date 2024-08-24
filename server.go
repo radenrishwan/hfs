@@ -9,22 +9,37 @@ import (
 
 type ResponseHandler func(Request) *Response
 type ErrResponseHandler func(Request, error) *Response
+type MiddlewareHandler func(Request)
 
 type Handler struct {
-	Path    string
-	Method  string
-	Handler ResponseHandler
+	Path       string
+	Method     string
+	Handler    ResponseHandler
+	Middleware []MiddlewareHandler
+}
+
+func (handler *Handler) Use(middleware MiddlewareHandler) *Handler {
+	handler.Middleware = append(handler.Middleware, middleware)
+
+	return handler
 }
 
 type Option struct {
-	ErrHandler ErrResponseHandler
+	ErrHandler       ErrResponseHandler
+	GlobalMiddleware []MiddlewareHandler
 }
 
 type Server struct {
-	address    string
-	socket     net.Listener
-	Handlers   []Handler
-	ErrHandler ErrResponseHandler
+	address  string
+	socket   net.Listener
+	Handlers []Handler
+	Option   Option
+}
+
+func (s *Server) Use(middleware MiddlewareHandler) *Server {
+	s.Option.GlobalMiddleware = append(s.Option.GlobalMiddleware, middleware)
+
+	return s
 }
 
 func NewServer(address string, option Option) *Server {
@@ -44,8 +59,8 @@ func NewServer(address string, option Option) *Server {
 	}
 
 	return &Server{
-		address:    address,
-		ErrHandler: option.ErrHandler,
+		address: address,
+		Option:  option,
 	}
 }
 
@@ -68,7 +83,7 @@ func (s *Server) ListenAndServe() error {
 				Body:    "Server Error",
 			}
 
-			response := s.ErrHandler(request, NewServerError("Error while accepting connection"))
+			response := s.Option.ErrHandler(request, NewServerError("Error while accepting connection"))
 			writeResponse(response, conn)
 		}
 
@@ -85,7 +100,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 
 	request, err := parseRequest(conn)
 	if err != nil {
-		response := s.ErrHandler(Request{Conn: conn}, err)
+		response := s.Option.ErrHandler(Request{Conn: conn}, err)
 		writeResponse(response, conn)
 		return
 	}
@@ -97,7 +112,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 		if request.Path == handler.Path {
 			// check if method is not same, if method is "", call the handler instead
 			if handler.Method != request.Method && handler.Method != "" {
-				response = s.ErrHandler(request, NewHttpError(405, "Method not allowed", request))
+				response = s.Option.ErrHandler(request, NewHttpError(405, "Method not allowed", request))
 				break
 			}
 
@@ -112,6 +127,16 @@ func (s *Server) handleConnection(conn net.Conn) {
 
 				}()
 
+				// run global middleware
+				for _, middleware := range s.Option.GlobalMiddleware {
+					middleware(request)
+				}
+
+				// run middleware
+				for _, middleware := range handler.Middleware {
+					middleware(request)
+				}
+
 				response = handler.Handler(request)
 			}()
 
@@ -120,17 +145,23 @@ func (s *Server) handleConnection(conn net.Conn) {
 	}
 
 	if err != nil {
-		response = s.ErrHandler(request, err)
+		response = s.Option.ErrHandler(request, err)
 	}
 
 	if response == nil {
-		response = s.ErrHandler(request, NewHttpError(404, "No handler found for the request", request))
+		response = s.Option.ErrHandler(request, NewHttpError(404, "No handler found for the request", request))
 	}
 
 	writeResponse(response, conn)
 }
 
-func (s *Server) Handle(path string, handler ResponseHandler) error {
+// Handle registers a handler for the given path
+// The middleware its different with global middleware, its not run for all request
+func (s *Server) Handle(
+	path string,
+	handler ResponseHandler,
+	middleware ...MiddlewareHandler,
+) error {
 	// check duplicate path
 	for _, h := range s.Handlers {
 		if h.Path == path {
@@ -140,17 +171,22 @@ func (s *Server) Handle(path string, handler ResponseHandler) error {
 
 	method, path := parsePath(path)
 
-	s.Handlers = append(s.Handlers, Handler{
-		Path:    path,
-		Handler: handler,
-		Method:  method,
-	})
+	res := Handler{
+		Path:       path,
+		Handler:    handler,
+		Method:     method,
+		Middleware: make([]MiddlewareHandler, 0),
+	}
+
+	res.Middleware = append(res.Middleware, middleware...)
+
+	s.Handlers = append(s.Handlers, res)
 
 	return nil
 }
 
 func (s *Server) SetErrHandler(handler ErrResponseHandler) {
-	s.ErrHandler = handler
+	s.Option.ErrHandler = handler
 }
 
 func (s *Server) ServeFile(path string, filePath string) error {
