@@ -29,12 +29,12 @@ const (
 )
 
 const (
-	STATUS_CLOSE_NORMAL_CLOSUE         = 1000
+	STATUS_CLOSE_NORMAL_CLOSURE        = 1000
 	STATUS_CLOSE_GOING_AWAY            = 1001
 	STATUS_CLOSE_PROTOCOL_ERR          = 1002
 	STATUS_CLOSE_UNSUPPORTED           = 1003
 	STATUS_CLOSE_NO_STATUS             = 1005
-	STATUS_CLOSE_ABNORMAL_CLOSUE       = 1006
+	STATUS_CLOSE_ABNORMAL_CLOSURE      = 1006
 	STATUS_CLOSE_INVALID_PAYLOAD       = 1007
 	STATUS_CLOSE_POLICY_VIOLATION      = 1008
 	STATUS_CLOSE_MESSAGE_TOO_BIG       = 1009
@@ -172,11 +172,25 @@ func (client *Client) Read() ([]byte, error) {
 	return f.Payload, nil
 }
 
-func (client *Client) Close() error {
+func (client *Client) Close(reason string, code int) error {
 	// send close normal closue
-	// client.SendWithMessageType("", STATUS_CLOSE_NORMAL_CLOSUE)
+	closeMSG := make([]byte, 0)
 
-	err := client.Conn.Close()
+	// add status code on the first 2 byte
+	closeMSG = append(closeMSG, byte(code>>8))
+	closeMSG = append(closeMSG, byte(code&0xFF))
+
+	// add reason
+	closeMSG = append(closeMSG, []byte(reason)...)
+
+	frame := encodeFrame(closeMSG, CLOSE)
+
+	_, err := client.Conn.Write(frame)
+	if err != nil {
+		return NewWsError("Error sending close signal : " + err.Error())
+	}
+
+	err = client.Conn.Close()
 	if err != nil {
 		return NewWsError("Error closing connection : " + err.Error())
 	}

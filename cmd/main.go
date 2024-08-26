@@ -1,10 +1,9 @@
 package main
 
 import (
-	"fmt"
 	"log/slog"
-	"net/http"
 	"os"
+	"time"
 
 	"github.com/radenrishwan/hfs"
 )
@@ -15,133 +14,46 @@ var websocket = hfs.NewWebsocket(nil)
 func main() {
 	slog.SetDefault(DEFAULT_LOGGER)
 
-	server := hfs.NewServer("localhost:3000", hfs.Option{})
-
-	server.SetErrHandler(func(req hfs.Request, err error) *hfs.Response {
-		slog.Error("Error while handling request", "ERROR", err)
-
-		if httpError, ok := err.(*hfs.HttpError); ok {
-			if httpError.Code == http.StatusNotFound {
-				return &hfs.Response{
-					Code: 404,
-					Headers: map[string]string{
-						"Content-Type": "text/plain",
-					},
-					Body: "Not Found",
-				}
-			}
-		}
-
-		return &hfs.Response{
-			Code: 500,
-			Headers: map[string]string{
-				"Content-Type": "text/plain",
-			},
-			Body: "Internal Server Error",
-		}
+	server := hfs.NewServer("localhost:8080", hfs.Option{})
+	defer server.Close()
+	server.Use(func(r hfs.Request) {
+		slog.Info("", "Version", r.Version, "Method", r.Method, "Path", r.Path, "Time", time.Now().String())
 	})
 
-	server.Handle("/ws", func(req hfs.Request) *hfs.Response {
-		fmt.Println("Upgrading to websocket")
-		client, err := websocket.Upgrade(req)
+	server.ServeDir("/", "html/")
+	server.ServeFile("/", "html/index.html")
+
+	server.Handle("/hello", func(r hfs.Request) *hfs.Response {
+		return hfs.NewTextResponse("Hello, World")
+	})
+
+	server.Handle("/ws", func(r hfs.Request) *hfs.Response {
+		client, err := websocket.Upgrade(r)
+		defer client.Close("Closing connection", hfs.STATUS_CLOSE_NORMAL_CLOSURE)
+
 		if err != nil {
-			panic(err)
+			slog.Error("Error while upgrading to websocket", "ERROR", err)
+			panic(hfs.NewHttpError(500, "error while upgrading ws", r))
 		}
 
 		for {
-			p, err := client.Read()
+			msg, err := client.Read()
 			if err != nil {
-				client.Close()
 				slog.Error("Error while reading message", "ERROR", err)
-
+				break
 			}
 
-			err = client.Send("Hello, Client")
+			slog.Info("Message received", "Message", string(msg))
+
+			err = client.Send(string(msg))
 			if err != nil {
 				slog.Error("Error while sending message", "ERROR", err)
 				break
 			}
-
-			fmt.Println("Received: ", string(p))
 		}
 
-		return &hfs.Response{
-			Code: 200,
-			Headers: map[string]string{
-				"Content-Type": "text/plain",
-			},
-			Body: "Websocket",
-		}
+		return hfs.NewTextResponse("Hello, World")
 	})
-
-	server.Handle("GET /", func(req hfs.Request) *hfs.Response {
-		// panic(hfs.NewHttpError(500, "Internal Server Error", req))
-
-		return &hfs.Response{
-			Code: 200,
-			Headers: map[string]string{
-				"Content-Type": "text/plain",
-			},
-			Body: "Home",
-		}
-	})
-
-	server.Handle("GET /cookie", func(req hfs.Request) *hfs.Response {
-		fmt.Println(req.Cookie)
-
-		response := hfs.NewResponse()
-		response.SetCode(200)
-		response.AddHeader("Content-Type", "text/plain")
-		response.SetBody("Hello, World!")
-
-		response.SetCookie("foo", "bar", "/", 3600)
-		response.SetCookie("baz", "qux", "/", 3600)
-
-		return response
-	})
-
-	server.Handle("/about", func(req hfs.Request) *hfs.Response {
-		return &hfs.Response{
-			Code: 200,
-			Headers: map[string]string{
-				"Content-Type": "text/plain",
-			},
-			Body: "About Page",
-		}
-	})
-
-	server.Handle("/args", func(req hfs.Request) *hfs.Response {
-		response := hfs.NewResponse()
-		response.SetCode(200)
-		response.SetBody(req.Args["name"])
-
-		return response
-	})
-
-	server.Handle("GET /get", func(req hfs.Request) *hfs.Response {
-		response := hfs.NewResponse()
-		response.SetCode(200)
-		response.SetBody("GET")
-
-		return response
-	})
-
-	server.Handle("POST /post", func(req hfs.Request) *hfs.Response {
-		response := hfs.NewResponse()
-		response.SetCode(200)
-		response.SetBody("POST")
-
-		return response
-	})
-
-	err := server.ServeDir("GET /file", "html/")
-	if err != nil {
-		fmt.Println(err)
-	}
-
-	for _, s := range server.Handlers {
-		fmt.Println(s.Path)
-	}
 
 	server.ListenAndServe()
 }

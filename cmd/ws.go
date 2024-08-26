@@ -179,7 +179,7 @@ func main() {
 		for {
 			msg, err := client.Read()
 			if err != nil {
-				client.Close()
+				client.Close("error reading message", hfs.STATUS_CLOSE_ABNORMAL_CLOSURE)
 				pool.Unregister <- &user
 				slog.Error("Error while reading message on read", "ERROR", err)
 				break
@@ -192,6 +192,10 @@ func main() {
 			if err != nil {
 				slog.Error("Error while unmarshalling message", "ERROR", err)
 				continue
+			}
+
+			if userMSG.Content == "close" {
+				client.Close("closing connection...", hfs.STATUS_CLOSE_TRY_AGAIN_LATER)
 			}
 
 			switch userMSG.Type {
