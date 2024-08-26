@@ -95,6 +95,10 @@ func (s *Server) ListenAndServe() error {
 	}
 }
 
+func (s *Server) Close() error {
+	return s.socket.Close()
+}
+
 func (s *Server) handleConnection(conn net.Conn) {
 	defer conn.Close()
 
