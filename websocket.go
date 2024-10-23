@@ -5,7 +5,6 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	"net"
-	"time"
 )
 
 const MAGIC_KEY = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
@@ -47,10 +46,10 @@ const (
 
 type Websocket struct {
 	Option *WSOption
+	Rooms  map[string]*Room
 }
 
 type Client struct {
-	Id     int64
 	Conn   net.Conn
 	option *WSOption
 }
@@ -82,6 +81,7 @@ func NewWebsocket(option *WSOption) (ws Websocket) {
 
 	return Websocket{
 		Option: option,
+		Rooms:  map[string]*Room{},
 	}
 }
 
@@ -112,7 +112,6 @@ func (ws *Websocket) Upgrade(request Request) (client Client, err error) {
 	}
 
 	client.Conn = request.Conn
-	client.Id = time.Now().UnixNano()
 	client.option = ws.Option
 
 	return client, nil
