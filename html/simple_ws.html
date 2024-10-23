@@ -1,0 +1,27 @@
+<div id="websocket-container">
+  <input type="text" id="message-input" placeholder="Enter your message" />
+  <button id="send-button">Send</button>
+  <div id="output"></div>
+</div>
+
+<script>
+  const socket = new WebSocket("ws://localhost:8080/ws");
+  const messageInput = document.getElementById("message-input");
+  const sendButton = document.getElementById("send-button");
+  const output = document.getElementById("output");
+
+  socket.addEventListener("open", (event) => {
+    output.innerHTML += "Connected to WebSocket server<br>";
+  });
+
+  socket.addEventListener("message", (event) => {
+    output.innerHTML += `Received: ${event.data}<br>`;
+  });
+
+  sendButton.addEventListener("click", () => {
+    const message = messageInput.value;
+    socket.send(message);
+    output.innerHTML += `Sent: ${message}<br>`;
+    messageInput.value = "";
+  });
+</script>
