@@ -40,6 +40,10 @@ func (ws *Websocket) Broadcast(roomName string, msg string, ignoreError bool) er
 
 	for _, client := range room.Client {
 		err := client.SendWithMessageType(msg, TEXT)
+		// check if client is still connected
+		if err != nil {
+			room.RemoveClient(client)
+		}
 
 		if !ignoreError {
 			if err != nil {
