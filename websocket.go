@@ -92,7 +92,16 @@ func NewWebsocket(option *WSOption) (ws Websocket) {
 // Sec-WebSocket-Protocol: chat
 
 func (ws *Websocket) Upgrade(request Request) (client Client, err error) {
-	key := request.Headers["Sec-WebSocket-Key"]
+	key := ""
+
+	if _, ok := request.Headers["sec-websocket-key"]; ok {
+		key = request.Headers["sec-websocket-key"]
+	}
+
+	if _, ok := request.Headers["Sec-WebSocket-Key"]; ok {
+		key = request.Headers["Sec-WebSocket-Key"]
+	}
+
 	if key == "" {
 		return client, NewWsError("Sec-WebSocket-Key is required")
 	}
