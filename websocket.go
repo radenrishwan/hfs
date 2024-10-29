@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	"net"
+	"sync"
 )
 
 const MAGIC_KEY = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
@@ -46,7 +47,7 @@ const (
 
 type Websocket struct {
 	Option *WSOption
-	Rooms  map[string]*Room
+	Rooms  sync.Map
 }
 
 type Client struct {
@@ -81,7 +82,7 @@ func NewWebsocket(option *WSOption) (ws Websocket) {
 
 	return Websocket{
 		Option: option,
-		Rooms:  map[string]*Room{},
+		Rooms:  sync.Map{},
 	}
 }
 

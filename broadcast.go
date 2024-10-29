@@ -12,24 +12,30 @@ func newRoom() (room Room) {
 
 func (ws *Websocket) CreateRoom(name string) error {
 	// check if room already exists
-	if _, ok := ws.Rooms[name]; ok {
+	if _, ok := ws.Rooms.Load(name); ok {
 		return NewWsError("Room already exists")
 	}
 
 	room := newRoom()
 
-	ws.Rooms[name] = &room
+	ws.Rooms.Store(name, &room)
 
 	return nil
 }
 
 func (ws *Websocket) GetRoom(name string) (*Room, bool) {
-	room, ok := ws.Rooms[name]
-	return room, ok
+	room, ok := ws.Rooms.Load(name)
+
+	r, rok := room.(*Room)
+	if !rok {
+		return nil, false
+	}
+
+	return r, ok
 }
 
 func (ws *Websocket) RemoveRoom(name string) {
-	delete(ws.Rooms, name)
+	ws.Rooms.Delete(name)
 }
 
 func (ws *Websocket) Broadcast(roomName string, msg string, ignoreError bool) error {
@@ -97,9 +103,11 @@ func (ws *Websocket) GetRoomList() []string {
 	// get all room
 	rooms := make([]string, 0)
 
-	for room := range ws.Rooms {
-		rooms = append(rooms, room)
-	}
+	ws.Rooms.Range(func(key, value any) bool {
+		rooms = append(rooms, key.(string))
+		return true
+
+	})
 
 	return rooms
 }
