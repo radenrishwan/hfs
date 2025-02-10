@@ -49,14 +49,14 @@ func main() {
 		for {
 			p, err := client.Read()
 			if err != nil {
-                log.Println(err)
+                	log.Println(err)
 				client.Close()
 
 			}
 
 			err = client.Send("Hello, Client")
 			if err != nil {
-                log.Println(err)
+                	log.Println(err)
 				break
 			}
 
