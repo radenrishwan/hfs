@@ -24,8 +24,9 @@ func main() {
 		response := hfs.NewResponse()
 		response.SetCode(200)
         
-        // get query args
-        name := req.Args["name"]
+        	// get query args
+        	name := req.Args["name"]
+
 		response.SetBody(name)
 
 		return response
